@@ -15,7 +15,6 @@ use mylib.defYaenamiAdc.all;
 use mylib.defRayrawAdcROV1.all;
 use mylib.defYAENAMIController.all; -- Slow Control
 use mylib.defMAX.all; -- APD_BIAS
-use mylib.defC6C.all;
 use mylib.defEVB.all;
 use mylib.defSiTCP.all;
 use mylib.defRBCP.all;
@@ -58,21 +57,12 @@ entity toplevel is
     EEP_DI              : out std_logic;
     EEP_DO              : in std_logic;
 
+    --EEP2_SCL            : out std_logic;
+    --EEP2_SDA            : inout std_logic;
+
     -- NIM-IO ---------------------------------------------------------------
     NIM_IN              : in std_logic_vector(2 downto 1);
-    NIM_OUT             : out std_logic_vector(2 downto 1);
-
-    -- JItter cleaner -------------------------------------------------------
-    CDCE_PDB            : out std_logic;
-    CDCE_LOCK           : in std_logic;
-    CDCE_SCLK           : out std_logic;
-    CDCE_SO             : in std_logic;
-    CDCE_SI             : out std_logic;
-    CDCE_SEN            : out std_logic;
-    CDCE_REFP           : out std_logic;
-    CDCE_REFN           : out std_logic;
-    CDCE_CLKP           : in std_logic_vector(1 downto 0);
-    CDCE_CLKN           : in std_logic_vector(1 downto 0);
+    NIM_OUT             : out std_logic_vector(4 downto 1);
 
     -- MIKUMARI -------------------------------------------------------------
     -- CDCM_RX_P           : in std_logic;
@@ -80,17 +70,18 @@ entity toplevel is
     -- CDCM_TX_P           : out std_logic;
     -- CDCM_TX_N           : out std_logic;
 
+    -- MISC -----------------------------------------------------------------
+    EN3V3A              : out std_logic;
+    AMUX_ADDR           : out std_logic_vector(1 downto 0);
+    -- TEST_POINT          : out std_logic_vector(3 downto 0);
+
     -- ASIC -----------------------------------------------------------------
     ASIC_REFC           : out std_logic_vector(3 downto 0);
     ASIC_SSB            : out std_logic_vector(3 downto 0);
     ASIC_SCK            : out std_logic;
     ASIC_MOSI           : out std_logic;
 
-
     ASIC_DISCRI         : in std_logic_vector(31 downto 0);
-
-    -- TRIGGER_OUT ----------------------------------------------------------
-    TRIG_O              : out std_logic_vector(31 downto 0);
 
     -- APD_BIAS -------------------------------------------------------------
     CP_CS_B             : out std_logic;
@@ -102,52 +93,11 @@ entity toplevel is
     ADC_DATA_P          : in std_logic_vector(31 downto 0);
     ADC_DATA_N          : in std_logic_vector(31 downto 0);
 
-
     ADC_DFRAME_P        : in std_logic_vector(3 downto 0);
     ADC_DFRAME_N        : in std_logic_vector(3 downto 0);
     ADC_DCLK_P          : in std_logic_vector(3 downto 0);
     ADC_DCLK_N          : in std_logic_vector(3 downto 0)
 
-    -- MEZZANINE ------------------------------------------------------------
-    -- MZN_P               : inout std_logic_vector(7 downto 0);
-    -- MZN_N               : inout std_logic_vector(7 downto 0);
-
-
-    -- System ----------------------------------------------------------------
-    -- CLKOSC        : in std_logic; -- 50 MHz
-    -- LED           : out std_logic_vector(kNumLED-1 downto 0);
-    -- DIP           : in  std_logic_vector(kNumBitDIP-1 downto 0);
-    -- PROG_B_ON     : out std_logic;
-    -- VP            : in std_logic; -- XADC
-    -- VN            : in std_logic; -- XADC
-
-    -- ASIC IO ---------------------------------------------------------------
-    -- DISCRI_IN     : in std_logic_vector(kNumInput-1 downto 0); -- 0-31 ch
-
-    -- PHY -------------------------------------------------------------------
-    -- GTX_REFCLK_P        : in std_logic;
-    -- GTX_REFCLK_N        : in std_logic;
-    -- GTX_TX_P            : out std_logic_vector(kNumGtx downto 1);
-    -- GTX_RX_P            : in  std_logic_vector(kNumGtx downto 1);
-    -- GTX_TX_N            : out std_logic_vector(kNumGtx downto 1);
-    -- GTX_RX_N            : in  std_logic_vector(kNumGtx downto 1);
-
-    -- EEPROM ----------------------------------------------------------------
-    -- PROM_CS	      : out std_logic;
-    -- PROM_SK       : out std_logic;
-    -- PROM_DI       : out std_logic;
-    -- PROM_DO       : in std_logic;
-
-    -- SPI flash memory ------------------------------------------------------
-    -- FCS_B         : out std_logic;
---    USR_CLK       : out std_logic;
-    -- MOSI          : out std_logic;
-    -- DIN           : in  std_logic;
-
-    -- User I/O --------------------------------------------------------------
-    -- USER_RST_B    : in std_logic;
-    -- NIMIN         : in  std_logic_vector(kNumNIM downto 1);
-    -- NIMOUT        : out std_logic_vector(kNumNIM downto 1)
 
     );
 end toplevel;
@@ -166,6 +116,9 @@ architecture Behavioral of toplevel is
 
   signal delayed_usr_rstb : std_logic;
 
+  signal pwr_on_reset : std_logic;
+  signal raw_pwr_on_reset : std_logic;
+
   -- DIP ---------------------------------------------------------------------
   signal dip_sw       : std_logic_vector(DIP'range);
   subtype DipID is integer range 1 to 8;
@@ -173,7 +126,7 @@ architecture Behavioral of toplevel is
     Index : DipID;
   end record;
   constant kSiTCP     : regLeaf := (Index => 1);
-  constant kC6CON     : regLeaf := (Index => 2);
+  constant kNC1       : regLeaf := (Index => 2);
   constant kNC2       : regLeaf := (Index => 3);
   constant kNC3       : regLeaf := (Index => 4);
   constant kNC4       : regLeaf := (Index => 5);
@@ -220,9 +173,6 @@ architecture Behavioral of toplevel is
   signal ext_clr          : std_logic;
   signal ext_busy         : std_logic;
 
-  -- C6C ----------------------------------------------------------------------------------
-  signal c6c_reset        : std_logic;
-
   -- EVB ----------------------------------------------------------------------------------
   signal evb_reset        : std_logic;
 
@@ -253,6 +203,10 @@ architecture Behavioral of toplevel is
   signal valid_data, empty_data, req_data  : std_logic;
 
   -- SiTCP ---------------------------------------------------------------------------------
+  signal tmp_sitcp_reset        : std_logic;
+  signal tmp_sitcp_reset_prev   : std_logic;
+  signal os_sitcp_reset         : std_logic;
+
   signal mii_reset    : std_logic;
 
   type typeUdpAddr is array(kNumGtx-1 downto 0) of std_logic_vector(kWidthAddrRBCP-1 downto 0);
@@ -351,6 +305,9 @@ architecture Behavioral of toplevel is
   end component;
 
   -- SFP transceiver -----------------------------------------------------------------------
+  constant kPcsPmaLinkStatus  : integer:= 0;
+  signal pcs_pma_status       : std_logic_vector(15 downto 0);
+
   constant kMiiPhyad      : std_logic_vector(kWidthPhyAddr-1 downto 0):= "00000";
   signal mii_init_mdc, mii_init_mdio : std_logic;
 
@@ -447,13 +404,16 @@ begin
     generic map(kNumDelay => 128)
     port map(clk_link, USR_RSTB, delayed_usr_rstb);
 
-  c6c_reset       <= '1' when(dip_sw(kC6CON.Index) = '0') else (not delayed_usr_rstb);
-  mmcm_cdcm_reset <= (not delayed_usr_rstb);
+  --mmcm_cdcm_reset <= (not delayed_usr_rstb);
 
-  clk_locked    <= clk_locked_sys and clk_locked_cdcm;
-  system_reset  <= (NOT clk_locked) or (not USR_RSTB);
-  user_reset    <= system_reset or rst_from_bus or emergency_reset;
-  bct_reset     <= system_reset or emergency_reset;
+  --clk_locked    <= clk_locked_sys and clk_locked_cdcm;
+  system_reset      <= (NOT clk_locked_sys) or (not USR_RSTB);
+  raw_pwr_on_reset  <= (not clk_locked_sys);
+  u_KeepPwrOnRst : entity mylib.RstDelayTimer
+    port map(raw_pwr_on_reset, X"0FFFFFFF", clk_link, open, pwr_on_reset);
+
+  user_reset        <= system_reset or rst_from_bus or emergency_reset;
+  bct_reset         <= system_reset or emergency_reset;
 
   dip_sw(1)   <= DIP(1);
   dip_sw(2)   <= DIP(2);
@@ -466,6 +426,8 @@ begin
 
   NIM_OUT(1)  <= clk_sys;
   NIM_OUT(2)  <= module_busy;
+  NIM_OUT(3)  <= '0';
+  NIM_OUT(4)  <= '0';
 --  NIM_OUT(2)  <= gclk_adc(0) when (DIP(7 downto 6) = "00") else
 --                 gclk_adc(1) when (DIP(7 downto 6) = "01") else
 --                 gclk_adc(2) when (DIP(7 downto 6) = "10") else
@@ -475,15 +437,14 @@ begin
 
   dummy_signal  <= or_reduce(asic_adc_data) or or_reduce(asic_adc_fco) or or_reduce(asic_adc_dco);
 
-
+  EN3V3A      <= '1';
 
   -- Fixed IO ports --------------------------------------------------------------------
   asic_discri_input  <= ASIC_DISCRI;
-  TRIG_O             <= ASIC_DISCRI;
 
   -- TRM -------------------------------------------------------------------------------
   -- LED <= clk_locked_sys & clk_locked_cdcm & module_busy &  tcp_isActive;
-  LED <= CDCE_LOCK & clk_locked_cdcm & module_busy &  tcp_isActive;
+  LED <= sitcp_reset & clk_locked_cdcm & module_busy &  tcp_isActive;
 
   seq_busy   <= tdc_busy OR adc_busy; -- OR dip_sw(kFBUSY.Index);
 
@@ -637,6 +598,9 @@ begin
       rst                 => user_reset,
       clk                 => clk_sys,
 
+      -- Analog Monitor (rayraw-v2 only) --
+      addrAmon            => AMUX_ADDR,
+
       -- NIM input signal --
       NimIn               => NIM_IN,
       ExtL1               => ext_L1,
@@ -714,38 +678,6 @@ begin
       readyLocalBus	    => ready_LocalBus(kAPD.ID)
     );
 
-  -- C6C -------------------------------------------------------------------------------
-  u_C6C_Inst : entity mylib.CDCE62002Controller
-    generic map(
-      kSysClkFreq         => 100_000_000,
-      kIoStandard         => "LVDS"
-    )
-    port map(
-      rst	                => system_reset,
-      clk	                => clk_sys,
-      refClkIn            => clk_link,
-
-      chipReset           => c6c_reset,
-      clkIndep            => clk_sys,
-      chipLock            => CDCE_LOCK,
-
-      -- Module output --
-      PDB                 => CDCE_PDB,
-      REF_CLKP            => CDCE_REFP,
-      REF_CLKN            => CDCE_REFN,
-      CSB_SPI             => CDCE_SEN,
-      SCLK_SPI            => CDCE_SCLK,
-      MOSI_SPI            => CDCE_SI,
-      MISO_SPI            => CDCE_SO,
-
-      -- Local bus --
-      addrLocalBus	      => addr_LocalBus,
-      dataLocalBusIn	    => data_LocalBusIn,
-      dataLocalBusOut	    => data_LocalBusOut(kC6C.ID),
-      reLocalBus		      => re_LocalBus(kC6C.ID),
-      weLocalBus		      => we_LocalBus(kC6C.ID),
-      readyLocalBus	      => ready_LocalBus(kC6C.ID)
-    );
 
   -- EVB -------------------------------------------------------------------------------
   evb_reset   <= user_reset OR evb_reset_from_DCT;
@@ -852,7 +784,7 @@ begin
   -- TSD ---------------------------------------------------------------------
   u_TSD_Inst : entity mylib.TCP_sender
     port map(
-      RST               => user_reset,
+      RST               => pwr_on_reset,
       CLK               => clk_link,
 
       -- data from EVB --
@@ -870,7 +802,21 @@ begin
 
 
   -- SiTCP Inst ------------------------------------------------------------------------
-  sitcp_reset     <= system_reset OR (NOT USR_RSTB);
+  --sitcp_reset     <= system_reset OR (NOT USR_RSTB);
+  u_SiTCPRst : entity mylib.ResetGen
+    port map((not pcs_pma_status(kPcsPmaLinkStatus)) or (not delayed_usr_rstb ), clk_link, tmp_sitcp_reset);
+
+  process(clk_link)
+  begin
+    if(clk_link'event and clk_link='1') then
+      -- Edge detection of tmp_sitcp_reset and make one clock wide pulse
+      os_sitcp_reset <= tmp_sitcp_reset OR (tmp_sitcp_reset_prev AND (not tmp_sitcp_reset));
+      tmp_sitcp_reset_prev <= tmp_sitcp_reset;
+    end if;
+  end process;
+
+  u_KeepSiTCPRst : entity mylib.RstDelayTimer
+    port map(os_sitcp_reset, X"00000FFF", clk_link, open, sitcp_reset);
 
   gen_SiTCP : for i in 0 to kNumGtx-1 generate
 
@@ -956,7 +902,7 @@ begin
     rbcpRd      => rbcp_rd(i),
 
     -- GMII clock domain --
-    rstXgmii    => system_reset,
+    rstXgmii    => pwr_on_reset,
     clkXgmii    => clk_link,
     rbcpXgAddr  => rbcp_gmii_addr(i),
     rbcpXgWd    => rbcp_gmii_wd(i),
@@ -968,7 +914,7 @@ begin
 
     u_gTCP_inst : entity mylib.global_sitcp_manager
       port map(
-        RST           => system_reset,
+        RST           => pwr_on_reset,
         CLK           => clk_link,
         ACTIVE        => tcp_isActive(i),
         REQ           => close_req(i),
@@ -980,7 +926,7 @@ begin
   -- SFP transceiver -------------------------------------------------------------------
   u_MiiRstTimer_Inst : entity mylib.MiiRstTimer
     port map(
-      rst         => system_reset,
+      rst         => (not pcs_pma_status(kPcsPmaLinkStatus)),
       clk         => clk_link,
       rstMiiOut   => mii_reset
     );
@@ -1023,7 +969,7 @@ begin
       rxuserClk2    => rxuser_clk2,
 
       -- GTXE_COMMON --
-      reset         => system_reset,
+      reset         => pwr_on_reset,
       clkIndep      => clk_indep,
       clkQPLL       => gt0_qplloutclk,
       refclkQPLL    => gt0_qplloutrefclk
@@ -1088,8 +1034,8 @@ begin
 
         -- General IO's
         ---------------
-        status_vector        => open,
-        reset                => system_reset
+        status_vector        => pcs_pma_status,
+        reset                => pwr_on_reset
         );
   end generate;
 
@@ -1120,7 +1066,7 @@ begin
      clk_tdc2          => clk_tdc(2),
      clk_tdc3          => clk_tdc(3),
      -- Status and control signals
-     reset             => mmcm_cdcm_reset,
+     reset             => (not clk_locked_sys),
      locked            => clk_locked_cdcm,
      clk_in1           => clk_link
     );
@@ -1137,29 +1083,5 @@ begin
       clk1kHz     => clk_1kHz
       );
 
-  -- CDCE clocks --
-  -- pll_is_locked   <= (mmcm_cdcm_locked or CDCE_LOCK) and clk_sys_locked;
-
---  u_IBUFDS_SLOW_inst : IBUFDS
---    generic map (
---       DIFF_TERM => TRUE, -- Differential Termination
---       IBUF_LOW_PWR => FALSE, -- Low power (TRUE) vs. performance (FALSE) setting for referenced I/O standards
---       IOSTANDARD => "LVDS")
---    port map (
---       O => NIM_OUT(1),  -- Buffer output
---       I => CDCE_CLKP(0),  -- Diff_p buffer input (connect directly to top-level port)
---       IB => CDCE_CLKN(0) -- Diff_n buffer input (connect directly to top-level port)
---       );
---
---  u_IBUFDS_FAST_inst : IBUFDS
---    generic map (
---       DIFF_TERM => TRUE, -- Differential Termination
---       IBUF_LOW_PWR => FALSE, -- Low power (TRUE) vs. performance (FALSE) setting for referenced I/O standards
---       IOSTANDARD => "LVDS")
---    port map (
---       O => NIM_OUT(2),  -- Buffer output
---       I => CDCE_CLKP(1),  -- Diff_p buffer input (connect directly to top-level port)
---       IB => CDCE_CLKN(1) -- Diff_n buffer input (connect directly to top-level port)
---       );
 
 end Behavioral;
