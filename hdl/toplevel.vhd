@@ -199,6 +199,8 @@ architecture Behavioral of toplevel is
   signal reg_evb2trm              : dataEvb2Trm;
   signal trigger_out              : TrigDownType;
 
+  signal trm_event_id             : std_logic_vector(mylib.defTRM.kWidthEventId-1 downto 0);
+
   -- DCT -----------------------------------------------------------------------------------
   signal daq_gate                 : std_logic;
   signal evb_reset_from_DCT       : std_logic;
@@ -207,6 +209,12 @@ architecture Behavioral of toplevel is
   signal sig_in_tdc     : arrayInput;
   signal tdc_busy       : std_logic;
   signal data_tdc_bbus  : BBusDataTDC;
+
+  signal tdc_leading_hit  : std_logic_vector(kNumInput-1 downto 0);
+  signal tdc_trailing_hit : std_logic_vector(kNumInput-1 downto 0);
+
+  signal tdc_sample_id    : std_logic_vector(kWidthTdcSampleId-1 downto 0);
+  signal tdc_event_id     : std_logic_vector(kWidthTdcEventId-1 downto 0);
 
   -- ADC ---------------------------------------------------------------------
   signal adc_busy         : std_logic;
@@ -503,6 +511,7 @@ begin
       ExtClear                => '0',
       ExtL1                   => ext_L1,
       ExtL2                   => '0',
+      ExtTAG                  => "0000",
 
       -- J0 trigger --
       J0Clear                 => '0',
@@ -517,6 +526,12 @@ begin
       RML2                    => '0',
       RMTAG                   => "0000",
 
+      -- Self trigger --
+      SelfClear               => '0',
+      SelfL1                  => '0',
+      SelfL2                  => '0',
+      SelfTAG                 => "0000",
+
       -- module input --
       dInTRM                  => reg_evb2trm,
 
@@ -530,7 +545,10 @@ begin
       dataLocalBusOut     => data_LocalBusOut(kTRM.ID),
       reLocalBus          => re_LocalBus(kTRM.ID),
       weLocalBus          => we_LocalBus(kTRM.ID),
-      readyLocalBus       => ready_LocalBus(kTRM.ID)
+      readyLocalBus       => ready_LocalBus(kTRM.ID),
+
+      -- Event Id --
+      eventIdOut          => trm_event_id
       );
 
   -- DCT -------------------------------------------------------------------------------
@@ -588,7 +606,21 @@ begin
       dataLocalBusOut     => data_LocalBusOut(kTDC.ID),
       reLocalBus          => re_LocalBus(kTDC.ID),
       weLocalBus          => we_LocalBus(kTDC.ID),
-      readyLocalBus       => ready_LocalBus(kTDC.ID)
+      readyLocalBus       => ready_LocalBus(kTDC.ID),
+
+      -- Self trigger --
+      selfTrig            => open, -- rayraw-v1 has no spare NIM output
+
+      -- Hit info --
+      tdcLeadingHitOut     => tdc_leading_hit,
+      tdcTrailingHitOut    => tdc_trailing_hit,
+
+      -- Tdc Id --
+      tdcSampleIdOut       => tdc_sample_id,
+
+      -- Event Id --
+      eventIdIn            => trm_event_id,
+      eventIdOut           => tdc_event_id
       );
 
   -- ADC -------------------------------------------------------------------------------
@@ -628,7 +660,17 @@ begin
       dataLocalBusOut     => data_LocalBusOut(kADC.ID),
       reLocalBus          => re_LocalBus(kADC.ID),
       weLocalBus          => we_LocalBus(kADC.ID),
-      readyLocalBus       => ready_LocalBus(kADC.ID)
+      readyLocalBus       => ready_LocalBus(kADC.ID),
+
+      -- Tdc hit --
+      tdcLeadingHitIn     => tdc_leading_hit,
+      tdcTrailingHitIn    => tdc_trailing_hit,
+
+      -- Sample Id --
+      tdcSampleIdIn       => tdc_sample_id,
+
+      -- Event Id --
+      eventIdIn           => tdc_event_id
       );
 
   -- IOM -------------------------------------------------------------------------------
