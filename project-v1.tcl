@@ -156,6 +156,7 @@ set files [list \
  [file normalize "${origin_dir}/ip/block_buffer_v2/block_buffer_v2.xci"] \
  [file normalize "${origin_dir}/ip/ringbuffer_bram_v1/ringbuffer_bram_v1.xci"] \
  [file normalize "${origin_dir}/ip/trigger_record_fifo/trigger_record_fifo.xci"] \
+ [file normalize "${origin_dir}/ip/hit_buffer/hit_buffer.xci"] \
  [file normalize "${origin_dir}/hdl/bbt-sitcp-core/SiTCP_XC7K_32K_BBT_V110.V"] \
  [file normalize "${origin_dir}/hdl/bbt-sitcp-core/TIMER.v"] \
  [file normalize "${origin_dir}/hdl/bbt-sitcp-core/WRAP_SiTCP_GMII_XC7K_32K.V"] \
@@ -420,6 +421,15 @@ if { ![get_property "is_locked" $file_obj] } {
 }
 
 set file "$origin_dir/ip/trigger_record_fifo/trigger_record_fifo.xci"
+set file [file normalize $file]
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "generate_files_for_reference" -value "0" -objects $file_obj
+set_property -name "registered_with_manager" -value "1" -objects $file_obj
+if { ![get_property "is_locked" $file_obj] } {
+  set_property -name "synth_checkpoint_mode" -value "Singular" -objects $file_obj
+}
+
+set file "$origin_dir/ip/hit_buffer/hit_buffer.xci"
 set file [file normalize $file]
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "generate_files_for_reference" -value "0" -objects $file_obj
