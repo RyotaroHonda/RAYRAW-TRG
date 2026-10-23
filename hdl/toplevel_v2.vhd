@@ -282,9 +282,11 @@ architecture Behavioral of toplevel is
 
   -- ADC ---------------------------------------------------------------------
   signal adc_busy         : std_logic;
-  signal data_adc_bbus    : BBusDataType;
   signal gclk_adc         : std_logic_vector(kNumASIC-1 downto 0);
   signal c_stop           : std_logic;
+
+  -- MIKUMARI TimeStamp ------------------------------------------------------
+  signal miku_ts_busy     : std_logic;
 
   -- IOM ----------------------------------------------------------------------------------
   signal ext_L1           : std_logic;
@@ -801,15 +803,15 @@ begin
         heartbeatCount    => heartbeat_count,
         hbfNumber         => hbf_number,
         hbfNumMismatch    => hbf_num_mismatch,
-        clkDiv16          => clk_sys_div16,
+        clkDiv16          => open,
 
         -- DAQ I/F --
         hbfCtrlGateIn     => frame_ctrl_gate,
         forceOn           => '1',
         frameState        => hbf_state,
 
-        hbfFlagsIn        => local_frame_flag,
-        frameFlags        => frame_flag_out,
+        hbfFlagsIn        => "00",
+        frameFlags        => open,
 
         -- LACCP Bus --
         dataBusIn         => data_laccp_intra_out(GetExtIntraIndex(kPortHBU)),
@@ -824,7 +826,9 @@ begin
   u_MUTIL : entity mylib.MikumariUtil
     generic map(
       kNumMikumari => kNumMikumari,
-      kSecondaryId => kIdMikuSec
+      kSecondaryId => kIdMikuSec,
+      kWidthHbCount => kWidthHbCount,
+      kWidthLaccpFineOffset => kWidthLaccpFineOffset
     )
     port map(
       -- System ----------------------------------------------------
@@ -869,7 +873,7 @@ begin
   -- LED <= clk_locked_sys & clk_locked_cdcm & module_busy &  tcp_isActive;
   LED <= sitcp_reset & clk_locked_miku & module_busy &  tcp_isActive;
 
-  seq_busy   <= tdc_busy OR adc_busy; -- OR dip_sw(kFBUSY.Index);
+  seq_busy   <= tdc_busy OR adc_busy or miku_ts_busy; -- OR dip_sw(kFBUSY.Index);
 
   u_TRM_Inst :  entity mylib.TriggerManager
     port map(
@@ -1000,7 +1004,7 @@ begin
       );
 
   -- ADC -------------------------------------------------------------------------------
-  data_bbus(kBbADC.ID) <= data_adc_bbus;
+   --<= data_adc_bbus;
 
   u_ADC_Inst : entity mylib.AdcBlock
     port map(
@@ -1023,7 +1027,7 @@ begin
 
       -- Builder bus -- TODO: change later
       addrBuilderBus      => addr_bbus,
-      dataBuilderBusOut   => data_adc_bbus,
+      dataBuilderBusOut   => data_bbus(kBbADC.ID),
       reBuilderBus        => re_bbus(kBbADC.ID),
       rvBuilderBus        => rv_bbus(kBbADC.ID),
       dReadyBuilderBus    => dready_bbus(kBbADC.ID),
@@ -1068,7 +1072,7 @@ begin
 
       -- Builder bus --
       addrBuilderBus      => addr_bbus,
-      dataBuilderBusOut   => data_adc_bbus,
+      dataBuilderBusOut   => data_bbus(kBbMIKUTS.ID),
       reBuilderBus        => re_bbus(kBbMIKUTS.ID),
       rvBuilderBus        => rv_bbus(kBbMIKUTS.ID),
       dReadyBuilderBus    => dready_bbus(kBbMIKUTS.ID),
@@ -1575,7 +1579,7 @@ begin
       clk_slow          => clk_slow,
       clk_fast          => clk_fast,
       -- Status and control signals
-      reset             => '0',
+      reset             => (not clk_locked_sys),
       locked            => clk_locked_miku,
       clk_in1           => clk_link
      );

@@ -44,6 +44,7 @@ architecture RTL of MikuTimeStamp is
   signal trg_in_mikudomain    : std_logic;
   signal valid_timestamp      : std_logic;
   signal empty_timestamp      : std_logic;
+  signal we_mikuts_fifo       : std_logic;
 
   -- builder bus control --
   signal num_word_event_summary               : BBusDataType;
@@ -89,7 +90,7 @@ architecture RTL of MikuTimeStamp is
   COMPONENT data_buffer
     PORT (
       clk         : IN STD_LOGIC;
-      rst         : IN STD_LOGIC;
+      srst        : IN STD_LOGIC;
       din         : IN STD_LOGIC_VECTOR(kWidthDaqWord-1 DOWNTO 0);
       wr_en       : IN STD_LOGIC;
       rd_en       : IN STD_LOGIC;
@@ -110,12 +111,15 @@ begin
   u_trg_sync : entity mylib.synchronizer
     port map(clk=>clkSlow, dIn=>triggerIn.L1Accept, dOut=>trg_in_mikudomain);
 
+  u_make_we : entity mylib.EdgeDetector
+    port map(clk=>clkSlow, dIn=>trg_in_mikudomain, dOut=>we_mikuts_fifo);
+
   u_sync_fifo :  mikuts_fifo
     port map (
       wr_clk  => clkSlow,
       rd_clk  => clk,
       din     => timeStamp,
-      wr_en   => trg_in_mikudomain,
+      wr_en   => we_mikuts_fifo,
       rd_en   => not empty_timestamp,
       dout    => synced_timestamp,
       full    => open,
@@ -142,10 +146,10 @@ begin
   isBoundToBuilder    <= is_bound_to_builder;
 
   -- data process --
-  u_rvm_block_buffer : data_buffer
+  u_block_buffer : data_buffer
     port map (
       clk         => clk,
-      rst         => sync_reset,
+      srst        => sync_reset,
       din         => din_block_buffer,
       wr_en       => we_block_buffer,
       rd_en       => re_block_buffer,
